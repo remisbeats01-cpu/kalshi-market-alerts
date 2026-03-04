@@ -54,6 +54,30 @@ async function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+
+async function sendTelegram(text) {
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
+
+  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: TELEGRAM_CHAT_ID,
+      text: text,
+      disable_web_page_preview: true
+    }),
+  });
+
+  if (!res.ok) {
+    console.log("Telegram error", res.status);
+  }
+}
+
 async function fetchMarkets(series, minCreated) {
   const url = new URL(`${BASE_URL}/markets`);
   url.searchParams.set("series_ticker", series);
@@ -90,6 +114,7 @@ async function fetchMarkets(series, minCreated) {
   let minCreated = state.min_created_ts;
   const seen = new Set(state.seen || []);
 await sendDiscord("✅ Kalshi alerts bot is running (test ping).");
+  await sendTelegram("✅ Kalshi Telegram alerts working");
   let newest = minCreated;
 
   for (const s of SERIES) {
@@ -113,9 +138,14 @@ await sendDiscord("✅ Kalshi alerts bot is running (test ping).");
         const link =
           `https://kalshi.com/markets/${seriesGuess}/${ticker}`;
 
-       await sendDiscord(
-  `<@750611556089200680> 🚨 NEW KALSHI MARKET\n${ticker}\n${title}\n${link}`
-);
+    const msg = `🚨 NEW KALSHI MARKET
+${ticker}
+${title}
+${link}`;
+
+await sendDiscord(msg);
+await sendTelegram(msg);
+        
       }
     }
 
