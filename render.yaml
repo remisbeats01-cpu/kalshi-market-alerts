@@ -1,0 +1,7 @@
+services:
+  - type: worker
+    name: kalshi-market-alerts
+    env: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: node index.js
