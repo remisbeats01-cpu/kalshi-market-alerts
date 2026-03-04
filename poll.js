@@ -93,36 +93,42 @@ async function fetchMarkets(series, minCreated) {
   let newest = minCreated;
 
   for (const s of SERIES) {
+
     const markets = await fetchMarkets(s, minCreated);
 
     for (const m of markets) {
+
       const ticker = m.ticker;
       const created = m.created_ts || 0;
+
       if (created > newest) newest = created;
 
       if (ticker && !seen.has(ticker)) {
+
         seen.add(ticker);
+
         const title = m.title || "(no title)";
         const seriesGuess = ticker.split("-")[0];
-        const link = `https://kalshi.com/markets/${seriesGuess}/${ticker}`;
-        await sendDiscord(`🚨 NEW KALSHI MARKET\n${ticker}\n${title}\n${link}`);
+
+        const link =
+          `https://kalshi.com/markets/${seriesGuess}/${ticker}`;
+
+        await sendDiscord(
+          `🚨 NEW KALSHI MARKET\n${ticker}\n${title}\n${link}`
+        );
       }
     }
 
-    // ✅ throttle between series calls to avoid Kalshi rate limiting
+    // throttle so we don't hit Kalshi rate limits
     await sleep(300);
+
   }
 
   state.min_created_ts = newest;
   state.seen = Array.from(seen).slice(-5000);
+
   saveState(state);
 
   console.log("Done. min_created_ts =", newest);
-})();
 
-  state.min_created_ts = newest;
-  state.seen = Array.from(seen).slice(-5000);
-  saveState(state);
-
-  console.log("Done. min_created_ts =", newest);
 })();
