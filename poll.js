@@ -113,9 +113,9 @@ await sendDiscord("✅ Kalshi alerts bot is running (test ping).");
         const link =
           `https://kalshi.com/markets/${seriesGuess}/${ticker}`;
 
-        await sendDiscord(
-          `🚨 NEW KALSHI MARKET\n${ticker}\n${title}\n${link}`
-        );
+       await sendDiscord(
+  `<@750611556089200680> 🚨 NEW KALSHI MARKET\n${ticker}\n${title}\n${link}`
+);
       }
     }
 
