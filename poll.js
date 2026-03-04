@@ -28,14 +28,7 @@ const SERIES = new Set([
 
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 
-const STATE_FILE = path.join(process.cwd(), "state.json");
-function loadState() {
-  try { return JSON.parse(fs.readFileSync(STATE_FILE, "utf8")); }
-  catch { return { min_created_ts: Math.floor(Date.now()/1000) - 600, seen: [] }; }
-}
-function saveState(state) {
-  fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
-}
+
 
 async function sendDiscord(text) {
   if (!DISCORD_WEBHOOK_URL) {
@@ -110,55 +103,47 @@ async function fetchMarkets(series, minCreated) {
 }
 
 (async function main() {
-  const state = loadState();
-  let minCreated = state.min_created_ts;
-  const seen = new Set(state.seen || []);
-await sendDiscord("✅ Kalshi alerts bot is running (test ping).");
-  await sendTelegram("✅ Kalshi Telegram alerts working");
-  let newest = minCreated;
+  // Always look back a bit so we don't miss anything between runs
+  // (GitHub Actions has no persistent disk, so we can't rely on state.json)
+  const now = Math.floor(Date.now() / 1000);
+  const LOOKBACK = 12 * 60 * 60; // 12 hours
+  const minCreated = now - LOOKBACK;
+
+  // Deduplicate within a single run
+  const seen = new Set();
+
+  let alertsSent = 0;
 
   for (const s of SERIES) {
-
     const markets = await fetchMarkets(s, minCreated);
 
     for (const m of markets) {
-
       const ticker = m.ticker;
+      if (!ticker) continue;
       const created = m.created_ts || 0;
+if (created < now - 10 * 60) continue; // only last 10 minutes
 
-      if (created > newest) newest = created;
+      // Dedupe
+      if (seen.has(ticker)) continue;
+      seen.add(ticker);
 
-      if (ticker && !seen.has(ticker)) {
+      const title = m.title || "(no title)";
+      const seriesGuess = ticker.split("-")[0];
+      const link = `https://kalshi.com/markets/${seriesGuess}/${ticker}`;
 
-        seen.add(ticker);
-
-        const title = m.title || "(no title)";
-        const seriesGuess = ticker.split("-")[0];
-
-        const link =
-          `https://kalshi.com/markets/${seriesGuess}/${ticker}`;
-
-    const msg = `🚨 NEW KALSHI MARKET
+      const msg = `🚨 NEW KALSHI MARKET
 ${ticker}
 ${title}
 ${link}`;
 
-await sendDiscord(msg);
-await sendTelegram(msg);
-        
-      }
+      await sendDiscord(msg);
+      await sendTelegram(msg);
+      alertsSent++;
     }
 
     // throttle so we don't hit Kalshi rate limits
     await sleep(300);
-
   }
 
-  state.min_created_ts = newest;
-  state.seen = Array.from(seen).slice(-5000);
-
-  saveState(state);
-
-  console.log("Done. min_created_ts =", newest);
-
+  console.log(`Done. Alerts sent: ${alertsSent}`);
 })();
