@@ -89,7 +89,7 @@ async function fetchMarkets(series, minCreated) {
   const state = loadState();
   let minCreated = state.min_created_ts;
   const seen = new Set(state.seen || []);
-
+await sendDiscord("✅ Kalshi alerts bot is running (test ping).");
   let newest = minCreated;
 
   for (const s of SERIES) {
