@@ -50,24 +50,39 @@ async function sendDiscord(text) {
   if (!res.ok) console.log("Discord error", res.status, await res.text().catch(()=> ""));
 }
 
+async function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 async function fetchMarkets(series, minCreated) {
   const url = new URL(`${BASE_URL}/markets`);
   url.searchParams.set("series_ticker", series);
   url.searchParams.set("min_created_ts", String(minCreated));
-  url.searchParams.set("limit", "200");
+  url.searchParams.set("limit", "50");
 
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`Kalshi HTTP ${r.status}`);
-  const j = await r.json();
-  return j.markets || [];
-}
+  // Retry w/ backoff if we get 429
+  let backoffMs = 1000;
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    const r = await fetch(url);
 
-function matches(marketTicker) {
-  const mt = (marketTicker || "").toLowerCase();
-  for (const s of SERIES) {
-    if (mt.startsWith(s + "-")) return s;
+    if (r.status === 429) {
+      console.log(`429 rate limit for ${series}. Backing off ${backoffMs}ms (attempt ${attempt}/5)`);
+      await sleep(backoffMs);
+      backoffMs *= 2;
+      continue;
+    }
+
+    if (!r.ok) {
+      throw new Error(`Kalshi HTTP ${r.status}`);
+    }
+
+    const j = await r.json();
+    return j.markets || [];
   }
-  return null;
+
+  // If we keep getting 429, just skip this series for this run (don't fail the whole job)
+  console.log(`Skipping ${series} after repeated 429s`);
+  return [];
 }
 
 (async function main() {
@@ -79,6 +94,7 @@ function matches(marketTicker) {
 
   for (const s of SERIES) {
     const markets = await fetchMarkets(s, minCreated);
+
     for (const m of markets) {
       const ticker = m.ticker;
       const created = m.created_ts || 0;
@@ -92,7 +108,17 @@ function matches(marketTicker) {
         await sendDiscord(`🚨 NEW KALSHI MARKET\n${ticker}\n${title}\n${link}`);
       }
     }
+
+    // ✅ throttle between series calls to avoid Kalshi rate limiting
+    await sleep(300);
   }
+
+  state.min_created_ts = newest;
+  state.seen = Array.from(seen).slice(-5000);
+  saveState(state);
+
+  console.log("Done. min_created_ts =", newest);
+})();
 
   state.min_created_ts = newest;
   state.seen = Array.from(seen).slice(-5000);
